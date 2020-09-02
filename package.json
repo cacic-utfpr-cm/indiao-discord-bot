@@ -1,0 +1,22 @@
+{
+  "name": "indiao-discord-bot",
+  "version": "1.0.0",
+  "description": "discord bot made to work on CACIC's server",
+  "main": "index.js",
+  "dependencies": {
+    "discord.js": "^12.3.1",
+    "discord.js-commando": "^0.10.0",
+    "ffbinaries": "^1.1.4",
+    "ffmpeg-binaries": "^4.0.0",
+    "ffmpeg-static": "^4.2.7",
+    "nodemon": "^2.0.4",
+    "opusscript": "0.0.7",
+    "ytdl-core": "^3.2.2"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
