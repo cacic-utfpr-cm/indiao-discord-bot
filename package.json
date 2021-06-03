@@ -1,22 +1,29 @@
 {
-  "name": "indiao-discord-bot",
+  "name": "indiao-discord-bot-1",
   "version": "1.0.0",
-  "description": "discord bot made to work on CACIC's server",
+  "description": "Discord bot to CACIC's Server",
   "main": "index.js",
   "dependencies": {
-    "discord.js": "^12.3.1",
-    "discord.js-commando": "^0.10.0",
-    "ffbinaries": "^1.1.4",
-    "ffmpeg-binaries": "^4.0.0",
-    "ffmpeg-static": "^4.2.7",
-    "nodemon": "^2.0.4",
-    "opusscript": "0.0.7",
-    "ytdl-core": "^3.2.2"
+    "@discordjs/opus": "^0.5.0",
+    "discord.js": "^12.5.3",
+    "ffmpeg": "0.0.4",
+    "ffmpeg-static": "^4.3.0",
+    "fluent-ffmpeg": "^2.1.2",
+    "ytdl-core": "^4.8.2"
   },
   "devDependencies": {},
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cacic-utfpr-cm/indiao-discord-bot.git"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/cacic-utfpr-cm/indiao-discord-bot/issues"
+  },
+  "homepage": "https://github.com/cacic-utfpr-cm/indiao-discord-bot#readme"
 }
