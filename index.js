@@ -1,133 +1,232 @@
-const Discord = require("discord.js");
-const { prefix, token } = require("./config.json");
-const ytdl = require("ytdl-core");
+const express = require('express');
+const app = express();
+app.get("/", (req, res) => {
+	res.sendStatus(200);
+})
+app.listen('3000')
+// Require the necessary discord.js classes
+const { Client, Intents, MessageEmbed } = require('discord.js');
+const ytdl = require('ytdl-core');
+const google = require('googleapis')
+const { token, prefix, googleAPI } = require('./config.json');
 
-const client = new Discord.Client();
+// Create a new client instance
+const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES,Intents.FLAGS.GUILD_VOICE_STATES] });
+const { getVoiceConnection, joinVoiceChannel, VoiceConnectionStatus, AudioPlayerStatus, createAudioResource, entersState, createAudioPlayer, NoSubscriberBehavior } = require('@discordjs/voice');
 
-const queue = new Map();
+client.queue = new Map()
 
+const youtube = new google.youtube_v3.Youtube({
+    version: 'v3',
+    auth: googleAPI
+})
+
+// When the client is ready, run this code (only once)
 client.once("ready", () => {
-  console.log("Mim estar pronto!");
+    console.log("Ayo, I booted!");
+    client.user.setActivity("i!help | release v1.4")
+    client.user.setStatus("idle");
 });
 
-client.once("reconnecting", () => {
-  console.log("Mim estar reconectando!");
-});
-
-client.once("disconnect", () => {
-  console.log("Mim foi disconectado!");
-});
-
-client.on("message", async message => {
-  if (message.author.bot) return;
-  if (!message.content.startsWith(prefix)) return;
-
-  const serverQueue = queue.get(message.guild.id);
-
-  if (message.content.startsWith(`${prefix}play`)) {
-    execute(message, serverQueue);
+client.on("error", error => {
+    console.log(error);
     return;
-  } else if (message.content.startsWith(`${prefix}skip`)) {
-    skip(message, serverQueue);
-    return;
-  } else if (message.content.startsWith(`${prefix}stop`)) {
-    stop(message, serverQueue);
-    return;
-  } else {
-    message.channel.send("Você precisa me passar um comando válido!");
-  }
 });
 
-async function execute(message, serverQueue) {
-  const args = message.content.split(" ");
-
-  const voiceChannel = message.member.voice.channel;
-  if (!voiceChannel)
-    return message.channel.send(
-      "Você precisa estar em um canal válido para tocar música!"
-    );
-  const permissions = voiceChannel.permissionsFor(message.client.user);
-  if (!permissions.has("CONNECT") || !permissions.has("SPEAK")) {
-    return message.channel.send(
-      "Mim precisa de permissão para entrar no seu canal de voz!"
-    );
-  }
-
-  const songInfo = await ytdl.getInfo(args[1]);
-  const song = {
-        title: songInfo.videoDetails.title,
-        url: songInfo.videoDetails.video_url,
-   };
-
-  if (!serverQueue) {
-    const queueContruct = {
-      textChannel: message.channel,
-      voiceChannel: voiceChannel,
-      connection: null,
-      songs: [],
-      volume: 5,
-      playing: true
-    };
-
-    queue.set(message.guild.id, queueContruct);
-
-    queueContruct.songs.push(song);
-
-    try {
-      var connection = await voiceChannel.join();
-      queueContruct.connection = connection;
-      play(message.guild, queueContruct.songs[0]);
-    } catch (err) {
-      console.log(err);
-      queue.delete(message.guild.id);
-      return message.channel.send(err);
+client.on("messageCreate", async message => {
+    // Filters
+    if (!message.guild) return
+    if (message.author.bot) return
+    if (!message.content.startsWith(prefix)) return
+    
+    // Spliting message
+    let args = message.content.split(prefix)[1].split(' ')
+    let command = args[0]
+    
+    // Handling message
+    if (command.toLowerCase() === "ping") {
+        message.reply("The **API** ping is " + "`" + client.ws.ping + "ms`. " + `The **message** ping is ` + "`" + (Date.now() - message.createdTimestamp) + "ms`.")
     }
-  } else {
-    serverQueue.songs.push(song);
-    return message.channel.send(`${song.title} has been added to the queue!`);
-  }
-}
 
-function skip(message, serverQueue) {
-  if (!message.member.voice.channel)
-    return message.channel.send(
-      "Você precisa estar em um canal de voz para pular a música!"
-    );
-  if (!serverQueue)
-    return message.channel.send("Não tem música para que mim possa pular!");
-  serverQueue.connection.dispatcher.end();
-}
+    if (command.toLowerCase() === "join") {
+        if (!message.member.voice.channel) return
+        const connection = joinVoiceChannel({
+            channelId: message.member.voice.channel.id,
+            guildId: message.guild.id,
+            adapterCreator: message.guild.voiceAdapterCreator,
+        });
 
-function stop(message, serverQueue) {
-  if (!message.member.voice.channel)
-    return message.channel.send(
-      "Você precisa estar em um canal de voz para pular a música!"
-    );
+        connection.on(VoiceConnectionStatus.Ready, () => {
+            console.log('The connection has entered the Ready state - ready to play audio!');
+        });
+
+        connection.on(VoiceConnectionStatus.Disconnected, async (oldState, newState) => {
+            try {
+                await Promise.race([
+                    entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
+                    entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+                ]);
+                // Seems to be reconnecting to a new channel - ignore disconnect
+            } catch (error) {
+                // Seems to be a real disconnect which SHOULDN'T be recovered from
+                connection.destroy();
+            }
+        });
+    }
+
+    if (command.toLowerCase() === "leave") {
+        if (!message.member.voice.channel) return
+        const connection = getVoiceConnection(message.guild.id);
+        connection.destroy();
+    }
+
+    if (command.toLowerCase() === "play") {
+        if (!message.member.voice.channel) return
+        if (args.length < 2) return message.reply('You need to add a link or a name')
+        
+        const connection = getVoiceConnection(message.guild.id);
+        if (connection){
+            try{
+                if (connection._state.subscription.player) console.log("Player already exists")
+            }catch{
+                const player = createAudioPlayer({
+                    behaviors: {
+                        noSubscriber: NoSubscriberBehavior.Stop,
+                    },
+                });
+                const subscription = connection.subscribe(player);
+                client.queue.set(message.guild.id, [])
+                player.on('error', error => {
+                    console.error(error);
+                });
+            }
+        }else{
+            return message.reply("Use rp!join so I can join your channel")
+        }
+
+        if (ytdl.validateURL(args[1])){
+            let videoID = ytdl.getURLVideoID(args[1])
+            let info = await ytdl.getInfo(videoID);
+            let videoInfo = {
+                title: info.videoDetails.title,
+                author: info.videoDetails.author.name,
+                thumbnail: `https://i.ytimg.com/vi/${videoID}/default.jpg`,
+                url: args[1]
+            }
+            createQueueSongResource(message, videoInfo)
+            
+        } else {
+            let name = args.slice(1,args.length).join(' ')
+            youtube.search.list({
+                q: name,
+                part: 'snippet',
+                fields: 'items(id(videoId), snippet(title, channelTitle, thumbnails(default(url))))',
+                type: 'video'
+            }, function (err, res) {
+                if (err) {
+                    console.log(err)
+                }
+                if (res) {
+                    // console.log(JSON.stringify(res.data))
+                    let id = res.data.items[0].id.videoId
+                    let videoURL = 'https://youtube.com/watch?v=' + id
+                    let videoInfo = {
+                        title: res.data.items[0].snippet.title,
+                        author: res.data.items[0].snippet.channelTitle,
+                        thumbnail: res.data.items[0].snippet.thumbnails.default.url,
+                        url: videoURL
+                    }
+                    createQueueSongResource(message, videoInfo)
+                }
+            })
+        }
+    }
+
+    if (command.toLowerCase() === "pause"){
+        const player = getPlayer(message)
+        player.pause();
+    }
+
+    if (command.toLowerCase() === "resume"){
+        const player = getPlayer(message)
+        player.unpause();
+    }
+
+    if (command.toLowerCase() === "stop"){
+        const player = getPlayer(message)
+        player.stop();
+    }
+
+    if (command.toLowerCase() === "status"){
+        if (message.member.id === ownerID)
+						console.log(getPlayerStatus(message))
+    }
+
+		if (command.toLowerCase() === "help"){
+        const embed = new MessageEmbed()
+            .setColor([0, 0, 200])
+            .setTitle('Comandos')
+            .setAuthor('Indião v1.4')
+            .addFields(
+                { name: 'i!ping', value: 'Retorna o ping do servidor' },
+                { name: 'i!join', value: 'Necessário para que o bot entre no seu canal' },
+                { name: 'i!leave', value: 'Bot sai do canal' },
+                { name: 'i!play <url/nome>', value: 'Toca música, podendo usar como parâmetro o url ou nome no youtube' },
+                { name: 'i!stop', value: 'Para a música' },
+                { name: 'i!pause', value: 'Pausa a música' },
+                { name: 'i!resume', value: 'Retorna a música pausada' },
+            )
+            .setFooter('Mais melhorias virão na versão 1.7');
+        message.channel.send({ embeds: [embed] });
+    }
     
-  if (!serverQueue)
-    return message.channel.send("Não tem música para que mim possa parar!");
-    
-  serverQueue.songs = [];
-  serverQueue.connection.dispatcher.end();
+})
+
+const createQueueSongResource = (message, songInfo) => {
+    const resource = createAudioResource(ytdl(songInfo.url, { filter : 'audioonly' }));
+    let playlistID = message.guild.id
+    client.queue.set(playlistID, [...client.queue.get(playlistID), resource])
+    let embed = new MessageEmbed()
+        .setColor([255, 0, 0])
+        .setTitle(`${songInfo.title}`)
+        .setAuthor(`${songInfo.author}`)
+        .setDescription('Song added')
+        .setThumbnail(`${songInfo.thumbnail}`)
+        .setURL(`${songInfo.url}`)
+
+    if (getPlayerStatus(message) === 'playing'){
+        message.channel.send({ embeds: [embed] })
+        message.delete()
+    }
+    else if (getPlayerStatus(message) === 'idle'){
+        playMusic(message)
+        message.channel.send({ embeds: [embed] })
+        message.delete()
+    }
 }
 
-function play(guild, song) {
-  const serverQueue = queue.get(guild.id);
-  if (!song) {
-    serverQueue.voiceChannel.leave();
-    queue.delete(guild.id);
-    return;
-  }
+const getPlayer = (msg) => {
+    const connection = getVoiceConnection(msg.guild.id);
+    return connection._state.subscription.player
+}
 
-  const dispatcher = serverQueue.connection
-    .play(ytdl(song.url))
-    .on("finish", () => {
-      serverQueue.songs.shift();
-      play(guild, serverQueue.songs[0]);
+const getPlayerStatus = (msg) => {
+    const connection = getVoiceConnection(msg.guild.id);
+    return connection._state.subscription.player._state.status
+}
+
+const playMusic = (message) => {
+    player = getPlayer(message)
+    player.play(client.queue.get(message.guild.id)[0])
+    player.on(AudioPlayerStatus.Idle, () => {
+        client.queue.get(message.guild.id).shift()
+
+        if (client.queue.get(message.guild.id).length){
+            playMusic(message, player)
+        }
     })
-    .on("error", error => console.error(error));
-  dispatcher.setVolumeLogarithmic(serverQueue.volume / 5);
-  serverQueue.textChannel.send(`Start playing: **${song.title}**`);
+
 }
 
+// Login to Discord with your client's token
 client.login(token);
