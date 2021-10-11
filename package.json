@@ -10,7 +10,6 @@
     "ffmpeg-static": "^4.4.0",
     "googleapis": "^88.2.0",
     "libsodium-wrappers": "^0.7.9",
-    "node": "^16.10.0",
     "ytdl-core": "^4.9.1"
   },
   "devDependencies": {},

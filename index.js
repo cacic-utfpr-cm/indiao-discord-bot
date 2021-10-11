@@ -101,7 +101,7 @@ client.on("messageCreate", async message => {
                 });
             }
         }else{
-            return message.reply("Use rp!join so I can join your channel")
+            return message.reply("Use i!join so I can join your channel")
         }
 
         if (ytdl.validateURL(args[1])){
@@ -176,6 +176,7 @@ client.on("messageCreate", async message => {
                 { name: 'i!pause', value: 'Pausa a música' },
                 { name: 'i!resume', value: 'Retorna a música pausada' },
             )
+            .setURL('https://github.com/cacic-utfpr-cm/indiao-discord-bot')
             .setFooter('Mais melhorias virão na versão 1.7');
         message.channel.send({ embeds: [embed] });
     }
